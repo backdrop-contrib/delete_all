@@ -12,38 +12,46 @@ define('DELETE_ALL_MAX_EXECUTION', 600);
  * Delete all 7.x module
  */
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function delete_all_menu() {
   $items = array();
 
   $items['admin/content/delete_content'] = array(
-    'title'            => 'Delete all content',
-    'description'      => 'Delete all nodes and comments on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
-    'page callback'    => 'drupal_get_form',
-    'page arguments'   => array('delete_all_content'),
+    'title' => 'Delete all content',
+    'description' => 'Delete all nodes and comments on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('delete_all_content'),
     'access arguments' => array('administer nodes'),
-    'type'             => MENU_NORMAL_ITEM,
+    'type' => MENU_NORMAL_ITEM,
   );
 
   $items['admin/content/delete_content/confirm'] = array(
-    'title'            => 'Confirm deletion of all content',
-    'page callback'    => 'drupal_get_form',
-    'page arguments'   => array('delete_all_content_confirm'),
+    'title' => 'Confirm deletion of all content',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('delete_all_content_confirm'),
     'access arguments' => array('administer nodes'),
-    'type'             => MENU_CALLBACK,
+    'type' => MENU_CALLBACK,
   );
 
   $items['admin/content/delete_users'] = array(
-    'title'            => 'Delete all users',
-    'description'      => 'Delete all users on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
-    'page callback'    => 'drupal_get_form',
-    'page arguments'   => array('delete_all_users'),
+    'title' => 'Delete all users',
+    'description' => 'Delete all users on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('delete_all_users'),
     'access arguments' => array('administer users'),
-    'type'             => MENU_NORMAL_ITEM,
+    'type' => MENU_NORMAL_ITEM,
   );
 
   return $items;
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function delete_all_content() {
   // count how many nodes we have of each type
   $result = db_query("SELECT type, COUNT(*) AS num FROM {node} GROUP BY type");
@@ -62,7 +70,7 @@ function delete_all_content() {
   }
   asort($types);
 
-  if(module_exists('taxonomy')) {
+  if (module_exists('taxonomy')) {
     // count how many taxonomy terms we have for each vocabulary
     $result = db_query("SELECT taxonomy_vocabulary.machine_name AS vocabulary, COUNT(*) AS num FROM {taxonomy_vocabulary} INNER JOIN {taxonomy_term_data} USING (vid) GROUP BY vocabulary");
     $taxocount = array();
@@ -98,7 +106,7 @@ function delete_all_content() {
     return $form;
   }
 
-  drupal_add_js(drupal_get_path('module', 'delete_all') . '/delete_all.js');
+  backdrop_add_js(backdrop_get_path('module', 'delete_all') . '/delete_all.js');
   $form = array();
   $form['all'] = array(
     '#type' => 'checkbox',
@@ -107,7 +115,7 @@ function delete_all_content() {
     '#description' => t('Select to delete all content'),
     '#attributes' => array('class' => array('delete-all')),
   );
-  if(module_exists('taxonomy')) {
+  if (module_exists('taxonomy')) {
     $form['taxonomy'] = array(
       '#type' => 'checkbox',
       '#default_value' => FALSE,
@@ -135,7 +143,7 @@ function delete_all_content() {
       '#description' => t('Select the types of node content to delete'),
     ),
   );
-  if(module_exists('taxonomy')) {
+  if (module_exists('taxonomy')) {
     $form['taxonomy-fieldset'] = array(
       '#type' => 'fieldset',
       '#title' => t('Taxonomy'),
@@ -156,7 +164,10 @@ function delete_all_content() {
     'method' => array(
       '#type' => 'radios',
       '#title' => t('Method'),
-      '#options' => array('normal' => t('Normal'), 'quick' => t('Quick')),
+      '#options' => array(
+        'normal' => t('Normal'),
+        'quick' => t('Quick'),
+      ),
       '#default_value' => 'normal',
       '#description' => t('Normal node delete calls node_delete() on every node in the database.  If you have only a few hundred nodes, this can take a very long time.  Use the quick node delete method to get around this problem.  This method deletes directly from the database, skipping the extra php processing.  The downside is that it can miss related tables that are normally handled by module hook_delete\'s.'),
     ),
@@ -169,6 +180,10 @@ function delete_all_content() {
   return $form;
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function delete_all_content_confirm() {
   $results = $_POST;
 
@@ -200,18 +215,18 @@ function delete_all_content_confirm() {
       );
 
       $form['all_warning'] = array(
-        '#markup' => '<p>' . t('All content in all content types will be deleted. Be sure to have a backup of any important data!') . '</p>'
+        '#markup' => '<p>' . t('All content in all content types will be deleted. Be sure to have a backup of any important data!') . '</p>',
       );
     }
     if (!empty($results['reset']) ) {
       if (empty($results['all']) ) {
         $form['all_reset'] = array(
-          '#markup' => '<p>' . t('Sorry, we can\'t reset the counters because you are not deleting all nodes.') . '</p>'
+          '#markup' => '<p>' . t('Sorry, we can\'t reset the counters because you are not deleting all nodes.') . '</p>',
         );
       }
       else {
         $form['all_reset'] = array(
-          '#markup' => '<p>' . t('Node, revision and comment counts will be reset.') . '</p>'
+          '#markup' => '<p>' . t('Node, revision and comment counts will be reset.') . '</p>',
         );
       }
     }
@@ -226,12 +241,12 @@ function delete_all_content_confirm() {
       $info = node_type_get_types('type', $type);
       $info = $info[$type];
       $form[$type . '_warning'] = array(
-        '#markup' => '<p>' . t('All node content of type %type will be deleted. Be sure to have a backup of any important data!', array('%type' => $info->name)) . '</p>'
+        '#markup' => '<p>' . t('All node content of type %type will be deleted. Be sure to have a backup of any important data!', array('%type' => $info->name)) . '</p>',
       );
     }
   }
 
-  if(module_exists('taxonomy')) {
+  if (module_exists('taxonomy')) {
     $vocabulary_info = array();
     foreach (taxonomy_get_vocabularies() as $vocabulary) {
       $vocabulary_info[$vocabulary->machine_name] = $vocabulary->name;
@@ -245,7 +260,7 @@ function delete_all_content_confirm() {
           );
           $info = $vocabulary_info[$vocabulary];
           $form[$vocabulary . '_warning'] = array(
-            '#markup' => '<p>' . t('All taxonomy terms of vocabulary %vocabulary will be deleted. Be sure to have a backup of any important data!', array('%vocabulary' => $info)) . '</p>'
+            '#markup' => '<p>' . t('All taxonomy terms of vocabulary %vocabulary will be deleted. Be sure to have a backup of any important data!', array('%vocabulary' => $info)) . '</p>',
           );
         }
       }
@@ -266,12 +281,16 @@ function delete_all_content_confirm() {
     $form[$vkey] = array(
       '#type' => 'hidden',
       '#value' => $results[$vkey],
-    ); 
+    );
   }
 
   return confirm_form($form, t('Are you sure you wish to delete content?'), 'admin/content/delete_content', NULL, t('Delete all content now'), t('Cancel delete of all content'));
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function delete_all_content_confirm_submit($form, &$form_state) {
   $types = array();
   $vocabularies = array();
@@ -279,7 +298,7 @@ function delete_all_content_confirm_submit($form, &$form_state) {
   foreach ($keys as $key) {
     $types[] = $form_state['values'][$key];
   }
-  if(isset($form_state['values']['taxonomy'])) {
+  if (isset($form_state['values']['taxonomy'])) {
     $vocabulary_info = array();
     foreach (taxonomy_get_vocabularies() as $vocabulary) {
       $vocabularies[$vocabulary->machine_name] = $vocabulary->vid;
@@ -318,34 +337,34 @@ function delete_all_content_confirm_submit($form, &$form_state) {
     // Delete the URL aliases
     db_query("DELETE FROM {url_alias} WHERE source LIKE 'node/%%'");
 
-    drupal_set_message(t('All nodes, comments and URL aliases have been deleted. Number of nodes deleted: !count_nodes.', array('!count' => check_plain($count['nodes']))));
-	if($count['terms']) {
-      drupal_set_message(t('All taxonomy terms deleted. Number of terms deleted: !count_terms.', array('!count' => check_plain($count['terms']))));
-	}
+    backdrop_set_message(t('All nodes, comments and URL aliases have been deleted. Number of nodes deleted: !count_nodes.', array('!count' => check_plain($count['nodes']))));
+    if ($count['terms']) {
+      backdrop_set_message(t('All taxonomy terms deleted. Number of terms deleted: !count_terms.', array('!count' => check_plain($count['terms']))));
+    }
 
     if ($form_state['values']['reset']) {
       db_query("ALTER TABLE node AUTO_INCREMENT=1");
       db_query("ALTER TABLE node_revision AUTO_INCREMENT=1");
       if (module_exists('comment')) {
         db_query("ALTER TABLE comment AUTO_INCREMENT=1");
-        drupal_set_message(t('All node, revision and comment counts have been reset.'));
+        backdrop_set_message(t('All node, revision and comment counts have been reset.'));
       }
       else {
-        drupal_set_message(t('All node and revision counts have been reset.'));
+        backdrop_set_message(t('All node and revision counts have been reset.'));
       }
     }
   }
   else {
-    drupal_set_message(t('Nodes and comments of type @type have been deleted. Number of nodes deleted: !count.', array('!count' => check_plain($count), '@type' => implode(', ', $types))));
+    backdrop_set_message(t('Nodes and comments of type @type have been deleted. Number of nodes deleted: !count.', array('!count' => check_plain($count), '@type' => implode(', ', $types))));
   }
 
-  drupal_goto('admin');
+  backdrop_goto('admin');
 }
 
 function _delete_all_normal($all, $types, $vocabularies) {
   $deleted = array(
     'nodes' => 0,
-	'terms' => 0,
+    'terms' => 0,
   );
   if (is_array($types) && count($types) > 0) {
     foreach ($types as $type) {
@@ -367,7 +386,7 @@ function _delete_all_normal($all, $types, $vocabularies) {
       $deleted['nodes']++;
     }
   }
-  if($vocabularies) {
+  if ($vocabularies) {
     $vocabulary_info = array();
     foreach (taxonomy_get_vocabularies() as $vocabulary) {
       $vocabulary_info[$vocabulary->machine_name] = $vocabulary->vid;
@@ -376,7 +395,7 @@ function _delete_all_normal($all, $types, $vocabularies) {
       foreach (taxonomy_get_tree($vocabulary_info[$vocabulary]) as $term) {
         taxonomy_term_delete($term->tid);
         $deleted['terms']++;
-	  }
+      }
     }
   }
   return $deleted;
@@ -392,7 +411,7 @@ function _delete_all_quick($types, $vocabularies) {
     set_time_limit(240);
 
     // determine how many items will be deleted
-	$count = db_select('node')->condition('type', $type)->countQuery()->execute()->fetchField();
+    $count = db_select('node')->condition('type', $type)->countQuery()->execute()->fetchField();
     if ($count) { // should always be positive
       /**
        * build a list of tables that need to be deleted from
@@ -403,7 +422,10 @@ function _delete_all_quick($types, $vocabularies) {
 
       $nid_vid = array('nid', 'vid');
       $nid = array('nid');
-      $tables = array('node_revisions' => $nid_vid, 'comments' => $nid);
+      $tables = array(
+        'node_revisions' => $nid_vid,
+        'comments' => $nid,
+      );
       $tables[_content_tablename($type, CONTENT_DB_STORAGE_PER_CONTENT_TYPE)] = $nid_vid;
       $content = content_types($type);
       if (count($content['fields'])) {
@@ -441,7 +463,11 @@ function _delete_all_quick($types, $vocabularies) {
 
       // @todo: update all node related nid references
       // delete from all of the content tables in one sql statement
-      $sql = array('delete' => array(), 'from' => array(), 'where' => array());
+      $sql = array(
+        'delete' => array(),
+        'from' => array(),
+        'where' => array(),
+      );
       $index = 0;
       foreach ($tables as $table => $cols) {
         $table = '{' . $table . '}';
@@ -453,7 +479,7 @@ function _delete_all_quick($types, $vocabularies) {
         }
         // now that we have the ON clause, build the join clause
         $sql['join'][] = " LEFT JOIN $table t$index ON " . implode(' AND ', $on);
-        $index ++;
+        $index++;
       }
       $delete_sql = "DELETE n.*, " . implode(', ', $sql['cols']) . " FROM {node} n " . implode(' ', $sql['join']);
       db_query($delete_sql . " WHERE n.type = '%s'", $type);
@@ -474,6 +500,10 @@ function _delete_all_quick($types, $vocabularies) {
   return $deleted;
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function delete_all_users() {
   $form = array();
   return confirm_form(
@@ -486,13 +516,21 @@ function delete_all_users() {
     'delete_all_content');
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function delete_all_users_submit($form, &$form_state) {
   ini_set('max_execution_time', DELETE_ALL_MAX_EXECUTION);
   $count = delete_all_users_delete();
-  drupal_set_message(t('All users have been deleted. Number of users deleted: !count.', array('!count' => check_plain($count))));
-  drupal_goto('admin');
+  backdrop_set_message(t('All users have been deleted. Number of users deleted: !count.', array('!count' => check_plain($count))));
+  backdrop_goto('admin');
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function delete_all_users_delete($roles = NULL) {
   $count = 0;
   if (!$roles) {

@@ -1,6 +1,6 @@
 // $Id: delete_all.js,v 1.2 2008/08/04 00:20:55 kbahey Exp $
 
-if (Drupal.jsEnabled) {
+if (Backdrop.jsEnabled) {
   $(document).ready(function () {
     function check_buttons() {
       if ($('#delete-all-content .delete-all').is(':checked')) {
@@ -9,7 +9,7 @@ if (Drupal.jsEnabled) {
       else {
         $('#delete-all-content .form-checkboxes input').removeAttr('checked').removeAttr('disabled');
         if ($('#delete-all-content fieldset').is('.collapsed')) {
-          Drupal.toggleFieldset($('#delete-all-content fieldset'));
+          Backdrop.toggleFieldset($('#delete-all-content fieldset'));
         }
       }
     }
