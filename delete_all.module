@@ -434,16 +434,30 @@ function delete_all_users_delete($roles = NULL) {
     if (is_array($roles)) {
       $result = array();
       foreach ($roles as $role) {
-        $rid = db_select('role', 'r')->fields('r', array('rid'))->condition('name', $role, '=')->execute()->fetchField();
-        $result = array_merge($result, db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('rid', $rid, '=')->execute()->fetchCol('uid'));
+        $result = array_merge($result, db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('role', $role, '=')->execute()->fetchCol('uid'));
+      }
+    }
+    else if ($roles == 'norole') {
+      $users = entity_load_multiple('user', FALSE, $conditions = array(), $reset = FALSE);
+      foreach ($users as $user) {
+        // All users currently
+        $result[$user->uid] = $user->uid;
+      }
+      $roles_result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->execute()->fetchCol('uid');
+      foreach($roles_result as $role_user) {
+        if (isset($result[$role_user])) {
+          // Unset if user has a role.
+          unset($result[$role_user]);
+        }
       }
     }
     else {
-      $rid = db_select('role', 'r')->fields('r', array('rid'))->condition('name', $roles, '=')->execute()->fetchField();
-      $result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('rid', $rid, '=')->execute()->fetchCol('uid');
+      $result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('role', $roles, '=')->execute()->fetchCol('uid');
     }
     foreach ($result as $data) {
-      user_delete($data);
+      if ($data != 1) {
+        user_delete($data);
+      }
       $count++;
     }
     // @TODO Delete individual aliases
