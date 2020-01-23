@@ -444,12 +444,7 @@ function delete_all_users_delete($roles = NULL) {
         $result[$user->uid] = $user->uid;
       }
       $roles_result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->execute()->fetchCol('uid');
-      foreach($roles_result as $role_user) {
-        if (isset($result[$role_user])) {
-          // Unset if user has a role.
-          unset($result[$role_user]);
-        }
-      }
+      $result = array_diff($result, $roles_result);
     }
     else {
       $result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('role', $roles, '=')->execute()->fetchCol('uid');
@@ -457,8 +452,8 @@ function delete_all_users_delete($roles = NULL) {
     foreach ($result as $data) {
       if ($data != 1) {
         user_delete($data);
+        $count++;
       }
-      $count++;
     }
     // @TODO Delete individual aliases
   }

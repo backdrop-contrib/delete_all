@@ -1,5 +1,5 @@
-name = Delete content and users
-description = Allows deletion of all nodes, comments and users on a site. Useful for development or prior to launching a site.
+name = Delete All
+description = Allows bulk deletion of content, comments, taxonomy terms and users on a site. Useful for development or prior to launching a site, but be careful. Not recommended to install on production sites.
 package = Development
 configure = admin/content/delete_content
 backdrop = 1.x
