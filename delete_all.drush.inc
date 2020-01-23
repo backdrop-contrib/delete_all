@@ -46,9 +46,13 @@ function delete_all_drush_delete() {
   if ($types) {
     if (in_array('users', $types)) {
       if (!$types[1] && drush_get_option('roles')) {
-        $choices = user_roles(TRUE);
-        $choices['norole'] = 'Users With No Role';
+        $choices = user_roles(TRUE, $permission = NULL, $full_objects = FALSE);
+        $choices['norole'] = 'Users without a role';
         $role = drush_choice($choices, dt("Choose a role to delete."));
+        if (!(isset($choices[$role]))) {
+          drush_print('No users were deleted.');
+          return;
+        }
       }
       else {
         $role = $types[1];
