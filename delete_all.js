@@ -1,5 +1,3 @@
-// $Id: delete_all.js,v 1.2 2008/08/04 00:20:55 kbahey Exp $
-
 if (Backdrop.jsEnabled) {
   $(document).ready(function () {
     function check_buttons() {

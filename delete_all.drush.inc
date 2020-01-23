@@ -18,7 +18,7 @@ function delete_all_drush_command() {
       'reset' => 'Reset counter for node, revision and comment tables.',
     ),
     'examples' => array(
-      'drush delete-all article' => 'Delect all article nodes.',
+      'drush delete-all post' => 'Delete all post nodes.',
       'drush delete-all all' => 'Delete nodes of all types.',
       'drush delete-all all --reset' => 'Delete nodes of all types, and reset node, revision and comment counters.',
       'drush delete-all users' => 'Delete users.',
@@ -62,7 +62,8 @@ function delete_all_drush_delete() {
     }
     elseif (in_array('all', $types)) {
       db_query("DELETE FROM {url_alias} WHERE source LIKE 'node/%%'");
-      drush_print('Deleted ' . _delete_all_normal(TRUE, FALSE) . ' nodes');
+      $deleted = _delete_all_normal(TRUE, FALSE, FALSE);
+      drush_print('Deleted ' . $deleted['nodes'] . ' nodes');
       if (drush_get_option('reset')) {
         db_query("ALTER TABLE node AUTO_INCREMENT=1");
         db_query("ALTER TABLE node_revision AUTO_INCREMENT=1");
@@ -76,7 +77,8 @@ function delete_all_drush_delete() {
       }
     }
     else {
-      drush_print('Deleted ' . _delete_all_normal(FALSE, $types) . ' nodes');
+      $deleted = _delete_all_normal(FALSE, $types, NULL);
+      drush_print('Deleted ' . $deleted['nodes'] . ' nodes');
     }
   }
   else {

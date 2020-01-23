@@ -9,7 +9,7 @@ define('DELETE_ALL_MAX_EXECUTION', 600);
 
 /**
  * @file
- * Delete all 7.x module
+ * Delete all 1.x module
  */
 
 /**
@@ -20,8 +20,8 @@ function delete_all_menu() {
   $items = array();
 
   $items['admin/content/delete_content'] = array(
-    'title' => 'Delete all content',
-    'description' => 'Delete all nodes and comments on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
+    'title' => 'Bulk delete content',
+    'description' => 'Bulk delete nodes and comments on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
     'page callback' => 'backdrop_get_form',
     'page arguments' => array('delete_all_content'),
     'access arguments' => array('administer nodes'),
@@ -36,9 +36,9 @@ function delete_all_menu() {
     'type' => MENU_CALLBACK,
   );
 
-  $items['admin/content/delete_users'] = array(
-    'title' => 'Delete all users',
-    'description' => 'Delete all users on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
+  $items['admin/people/delete_users'] = array(
+    'title' => 'Delete all user accounts',
+    'description' => 'Delete all user accounts on this site. This is useful for development sites, or prior to launching the site. Otherwise it destroys all data on a site.',
     'page callback' => 'backdrop_get_form',
     'page arguments' => array('delete_all_users'),
     'access arguments' => array('administer users'),
@@ -72,7 +72,7 @@ function delete_all_content() {
 
   if (module_exists('taxonomy')) {
     // count how many taxonomy terms we have for each vocabulary
-    $result = db_query("SELECT taxonomy_vocabulary.machine_name AS vocabulary, COUNT(*) AS num FROM {taxonomy_vocabulary} INNER JOIN {taxonomy_term_data} USING (vid) GROUP BY vocabulary");
+    $result = db_query("SELECT vocabulary, COUNT(*) AS num FROM {taxonomy_term_data} GROUP BY vocabulary");
     $taxocount = array();
     foreach ($result as $data) {
       $taxocount[$data->vocabulary] = $data->num;
@@ -80,7 +80,8 @@ function delete_all_content() {
     // Add the taxonomy vocabularies to the form. If there are no eligible types to delete,
     // we don't need to render the form.
     $vocabularies = array();
-    foreach (taxonomy_get_vocabularies() as $vocabulary) {
+    $vocabulary_list = taxonomy_vocabulary_load_multiple(FALSE);
+    foreach ($vocabulary_list as $vocabulary) {
       $name = $vocabulary->machine_name;
       if (array_key_exists($name, $taxocount)) {
         $vocabularies[$name] = $vocabulary->name . ' (' . $taxocount[$name] . ')';
@@ -88,62 +89,66 @@ function delete_all_content() {
     }
     asort($vocabularies);
   }
-  if (empty($types) && empty($vocabularies)) {
-    $form = array();
-    $form['no_content_types'] = array(
-      '#prefix' => '<p>',
-      '#suffix' => '</p>',
-      '#value' => t('There are no content types with content available to delete. You must <a href="@node-add">create some content</a> in order to delete it.', array('@node-add' => url('node/add'))),
-    );
+  backdrop_add_js(backdrop_get_path('module', 'delete_all') . '/delete_all.js');
+  $form = array();
+
+  if (empty($types)) {
+    $empty_message = t('There are no content types with content available to delete. You must <a href="@node-add">create some content</a> in order to delete it.', array('@node-add' => url('node/add')));
 
     if (module_exists('devel')) {
-      $form['generate_content_suggestion'] = array(
-        '#prefix' => '<p>',
-        '#suffix' => '</p>',
-        '#value' => t('You can generate content quickly at the <a href="@generate-content-page">generate content page</a>.', array('@generate-content-page' => url('admin/generate/content'))),
-      );
+      $empty_message .= ' ' . t('For testing purposes, you can generate content quickly at the <a href="@generate-content-page">generate content page</a>.', array('@generate-content-page' => url('admin/devel/generate', array('query' => array('destination' => 'admin/content/delete_content')))));
     }
+    backdrop_set_message($empty_message, 'info');
+  }
+  if (empty($types) && empty($vocabularies)) {
     return $form;
   }
 
-  backdrop_add_js(backdrop_get_path('module', 'delete_all') . '/delete_all.js');
-  $form = array();
-  $form['all'] = array(
-    '#type' => 'checkbox',
-    '#default_value' => FALSE,
-    '#title' => t('Delete All Content'),
-    '#description' => t('Select to delete all content'),
-    '#attributes' => array('class' => array('delete-all')),
-  );
-  if (module_exists('taxonomy')) {
-    $form['taxonomy'] = array(
+  if (!empty($types)) {
+    $form['all'] = array(
       '#type' => 'checkbox',
-      '#default_value' => FALSE,
-      '#title' => t('Delete all Taxonomy'),
-      '#description' => t('Select to delete all taxonomy terms'),
+      '#default_value' => 0,
+      '#title' => t('Delete all content'),
+      '#description' => t('Select to delete all content from all content types.'),
       '#attributes' => array('class' => array('delete-all')),
     );
+    $form['reset'] = array(
+      '#type' => 'checkbox',
+      '#default_value' => FALSE,
+      '#title' => t('Reset content ids'),
+      '#description' => t('When deleting all content, you can also optionally reset content ids to start at 1 again.'),
+      '#attributes' => array('class' => array('delete-reset')),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="all"]' => array('checked' => TRUE),
+        ),
+      ),
+    );
+    $form['type-fieldset'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Content types'),
+      '#collapsible' => TRUE,
+      '#collapsed' => FALSE,
+      'types' => array(
+        '#type' => 'checkboxes',
+        '#options' => $types,
+        '#description' => t('Select the types of content to delete.'),
+      ),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="all"]' => array('checked' => TRUE),
+        ),
+      ),
+    );
   }
-  $form['reset'] = array(
-    '#type' => 'checkbox',
-    '#default_value' => FALSE,
-    '#title' => t('Reset node count'),
-    '#description' => t('Select to reset the node count'),
-    '#attributes' => array('class' => array('delete-reset')),
-  );
-
-  $form['type-fieldset'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Node types'),
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
-    'types' => array(
-      '#type' => 'checkboxes',
-      '#options' => $types,
-      '#description' => t('Select the types of node content to delete'),
-    ),
-  );
-  if (module_exists('taxonomy')) {
+  if (module_exists('taxonomy') && !empty($vocabularies)) {
+    $form['taxonomy'] = array(
+      '#type' => 'checkbox',
+      '#default_value' => 0,
+      '#title' => t('Delete all taxonomy terms'),
+      '#description' => t('Select to delete all taxonomy terms.'),
+      '#attributes' => array('class' => array('delete-all')),
+    );
     $form['taxonomy-fieldset'] = array(
       '#type' => 'fieldset',
       '#title' => t('Taxonomy'),
@@ -152,29 +157,22 @@ function delete_all_content() {
       'vocabularies' => array(
         '#type' => 'checkboxes',
         '#options' => $vocabularies,
-        '#description' => t('Select the taxonomy vocabularies to delete'),
+        '#description' => t('Select the taxonomy vocabularies to delete terms from.'),
+      ),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="taxonomy"]' => array('checked' => TRUE),
+        ),
       ),
     );
   }
-  $form['method-fieldset'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Method'),
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
-    'method' => array(
-      '#type' => 'radios',
-      '#title' => t('Method'),
-      '#options' => array(
-        'normal' => t('Normal'),
-        'quick' => t('Quick'),
-      ),
-      '#default_value' => 'normal',
-      '#description' => t('Normal node delete calls node_delete() on every node in the database.  If you have only a few hundred nodes, this can take a very long time.  Use the quick node delete method to get around this problem.  This method deletes directly from the database, skipping the extra php processing.  The downside is that it can miss related tables that are normally handled by module hook_delete\'s.'),
+  $form['actions'] = array(
+    '#type' => 'actions',
+    'submit' => array(
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+      '#attributes' => array('class' => array('button-danger')),
     ),
-  );
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Delete'),
   );
   $form['#action'] = url('admin/content/delete_content/confirm');
   return $form;
@@ -188,13 +186,9 @@ function delete_all_content_confirm() {
   $results = $_POST;
 
   $form = array();
-  $form['method'] = array(
-    '#type' => 'hidden',
-    '#value' => isset($results['method']) ? $results['method'] : '',
-  );
 
-  if (!isset($results['all']) ) {
-    $results['all'] = '';
+  if (!(isset($results['all'])) || $results['all'] == '') {
+    $results['all'] = FALSE;
   }
 
   if (!isset($results['reset']) ) {
@@ -206,27 +200,25 @@ function delete_all_content_confirm() {
     '#value' => isset($results['all']) ? $results['all'] : '',
   );
 
-  if (isset($results['all']) && !isset($results['types'])) {
+  if ($results['all'] && !isset($results['types'])) {
     if (!empty($results['all']) ) {
       // Only carry reset value through if delete all nodes is set
       $form['reset'] = array(
         '#type' => 'hidden',
         '#value' => $results['reset'],
       );
-
-      $form['all_warning'] = array(
-        '#markup' => '<p>' . t('All content in all content types will be deleted. Be sure to have a backup of any important data!') . '</p>',
-      );
+      if (!$results['confirm']) {
+        // Make sure we don't show this message twice.
+        backdrop_set_message('<p>' . t('All content in all content types will be deleted. Be sure to have a backup of any important data!') . '</p>', 'warning', FALSE);
+      }
     }
     if (!empty($results['reset']) ) {
       if (empty($results['all']) ) {
-        $form['all_reset'] = array(
-          '#markup' => '<p>' . t('Sorry, we can\'t reset the counters because you are not deleting all nodes.') . '</p>',
-        );
+        backdrop_set_message('<p>' . t('Sorry, we can\'t reset the content ids because you are not deleting all content items.') . '</p>', 'error', FALSE);
       }
       else {
         $form['all_reset'] = array(
-          '#markup' => '<p>' . t('Node, revision and comment counts will be reset.') . '</p>',
+          '#markup' => '<p>' . t('Content ids, revision ids and comment counts will be reset.') . '</p>',
         );
       }
     }
@@ -240,18 +232,30 @@ function delete_all_content_confirm() {
       );
       $info = node_type_get_types('type', $type);
       $info = $info[$type];
-      $form[$type . '_warning'] = array(
-        '#markup' => '<p>' . t('All node content of type %type will be deleted. Be sure to have a backup of any important data!', array('%type' => $info->name)) . '</p>',
-      );
+      backdrop_set_message('<p>' . t('All content of type %type will be deleted. Be sure to have a backup of any important data!', array('%type' => $info->name)) . '</p>', 'warning', FALSE);
     }
   }
 
   if (module_exists('taxonomy')) {
     $vocabulary_info = array();
-    foreach (taxonomy_get_vocabularies() as $vocabulary) {
+    foreach (taxonomy_vocabulary_load_multiple(FALSE) as $vocabulary) {
       $vocabulary_info[$vocabulary->machine_name] = $vocabulary->name;
     }
-    if (isset($results['vocabularies']) ) {
+    if (!(isset($results['taxonomy'])) || $results['taxonomy'] == '') {
+      $results['taxonomy'] = FALSE;
+    }
+    $form['taxonomy'] = array(
+      '#type' => 'hidden',
+      '#value' => isset($results['taxonomy']) ? $results['taxonomy'] : '',
+    );
+  
+    if ($results['taxonomy'] && !isset($results['vocabularies'])) {
+      if (!$results['confirm']) {
+        // Make sure we don't show this message twice.
+        backdrop_set_message('<p>' . t('All taxonomy terms in all vocabularies will be deleted. Be sure to have a backup of any important data!') . '</p>', 'warning', FALSE);
+      }
+    }
+    else if (isset($results['vocabularies']) ) {
       if (is_array($results['vocabularies'])) {
         foreach ($results['vocabularies'] as $key_vocabulary => $vocabulary) {
           $form['vocabulary_' . $key_vocabulary] = array(
@@ -259,9 +263,7 @@ function delete_all_content_confirm() {
             '#value' => $vocabulary,
           );
           $info = $vocabulary_info[$vocabulary];
-          $form[$vocabulary . '_warning'] = array(
-            '#markup' => '<p>' . t('All taxonomy terms of vocabulary %vocabulary will be deleted. Be sure to have a backup of any important data!', array('%vocabulary' => $info)) . '</p>',
-          );
+          backdrop_set_message('<p>' . t('All taxonomy terms of vocabulary %vocabulary will be deleted. Be sure to have a backup of any important data!', array('%vocabulary' => $info)) . '</p>', 'warning', FALSE);
         }
       }
     }
@@ -298,67 +300,51 @@ function delete_all_content_confirm_submit($form, &$form_state) {
   foreach ($keys as $key) {
     $types[] = $form_state['values'][$key];
   }
-  if (isset($form_state['values']['taxonomy'])) {
+  if ($form_state['values']['taxonomy']) {
     $vocabulary_info = array();
-    foreach (taxonomy_get_vocabularies() as $vocabulary) {
-      $vocabularies[$vocabulary->machine_name] = $vocabulary->vid;
+    foreach (taxonomy_vocabulary_load_multiple(FALSE) as $vocabulary) {
+      $vocabularies[$vocabulary->machine_name] = $vocabulary->machine_name;
     }
   }
   $vkeys = array_filter(array_keys($form_state['values']), "_delete_all_vocabulary_keys");
   foreach ($vkeys as $key) {
     $vocabularies[] = $form_state['values'][$key];
   }
-  switch ($form_state['values']['method']) {
-    case 'normal':
-      $count = _delete_all_normal($form_state['values']['all'], $types, $vocabularies);
-      break;
 
-    case 'quick':
-      // the quick method doesn't support an all option,
-      // so just get all the content types and delete all of those
-      if ($form_state['values']['all']) {
-        $result = db_query("SELECT DISTINCT type FROM {node}");
-        foreach ($result as $data) {
-          // while ($data = db_fetch_object($result)) {
-          $types[] = $type;
-        }
-        if ($form_state['values']['taxonomy']) {
-          $result = db_query("SELECT DISTINCT machine_name FROM {taxonomy_vocabulary}");
-          foreach ($result as $data) {
-            $vocabularies[] = $type;
-          }
-        }
-      }
-      $count = _delete_all_quick($types, $vocabularies);
-      break;
-  }
+  $count = _delete_all_normal($form_state['values']['all'], $types, $vocabularies);
 
-  if (!$types) {
+  if (empty($types) && $form_state['values']['all']) {
     // Delete the URL aliases
     db_query("DELETE FROM {url_alias} WHERE source LIKE 'node/%%'");
 
-    backdrop_set_message(t('All nodes, comments and URL aliases have been deleted. Number of nodes deleted: !count_nodes.', array('!count' => check_plain($count['nodes']))));
-    if ($count['terms']) {
-      backdrop_set_message(t('All taxonomy terms deleted. Number of terms deleted: !count_terms.', array('!count' => check_plain($count['terms']))));
-    }
-
-    if ($form_state['values']['reset']) {
-      db_query("ALTER TABLE node AUTO_INCREMENT=1");
-      db_query("ALTER TABLE node_revision AUTO_INCREMENT=1");
-      if (module_exists('comment')) {
-        db_query("ALTER TABLE comment AUTO_INCREMENT=1");
-        backdrop_set_message(t('All node, revision and comment counts have been reset.'));
-      }
-      else {
-        backdrop_set_message(t('All node and revision counts have been reset.'));
-      }
-    }
+    backdrop_set_message(t('All content, comments and URL aliases have been deleted. Number of content items deleted: !count.', array('!count' => check_plain($count['nodes']))));
   }
-  else {
-    backdrop_set_message(t('Nodes and comments of type @type have been deleted. Number of nodes deleted: !count.', array('!count' => check_plain($count), '@type' => implode(', ', $types))));
+  else if (!empty($types) && $count['nodes']) {
+    backdrop_set_message(t('Content and comments of type <strong>@type</strong> have been deleted. Number of content items deleted: !count.', array('!count' => check_plain($count['nodes']), '@type' => implode(', ', $types))));
+  }
+  if (empty($vocabularies) && $form_state['values']['taxonomy']) {
+    // Delete the URL aliases
+    db_query("DELETE FROM {url_alias} WHERE source LIKE 'taxonomy/term/%%'");
+
+    backdrop_set_message(t('All terms and URL aliases have been deleted. Number of terms deleted: !count.', array('!count' => check_plain($count['terms']))));
+  }
+  else if (!empty($vocabularies) && $count['terms']) {
+    backdrop_set_message(t('All taxonomy terms of vocabulary <strong>@vocab</strong> have been deleted. Number of terms deleted: !count.', array('!count' => check_plain($count['terms']), '@vocab' => implode(', ', $vocabularies))));
   }
 
-  backdrop_goto('admin');
+  if ($form_state['values']['reset']) {
+    db_query("ALTER TABLE node AUTO_INCREMENT=1");
+    db_query("ALTER TABLE node_revision AUTO_INCREMENT=1");
+    if (module_exists('comment')) {
+      db_query("ALTER TABLE comment AUTO_INCREMENT=1");
+      backdrop_set_message(t('All node, revision and comment counts have been reset.'));
+    }
+    else {
+      backdrop_set_message(t('All node and revision counts have been reset.'));
+    }
+  }
+
+  backdrop_goto('admin/content');
 }
 
 function _delete_all_normal($all, $types, $vocabularies) {
@@ -366,7 +352,8 @@ function _delete_all_normal($all, $types, $vocabularies) {
     'nodes' => 0,
     'terms' => 0,
   );
-  if (is_array($types) && count($types) > 0) {
+  $result = FALSE;
+  if (is_array($types) && !empty($types)) {
     foreach ($types as $type) {
       $result = db_query(
         'SELECT nid FROM {node} WHERE type = :type',
@@ -374,7 +361,7 @@ function _delete_all_normal($all, $types, $vocabularies) {
       );
     }
   }
-  else {
+  else if ($all) {
     $result = db_query(
       'SELECT nid FROM {node}'
     );
@@ -386,115 +373,16 @@ function _delete_all_normal($all, $types, $vocabularies) {
       $deleted['nodes']++;
     }
   }
-  if ($vocabularies) {
+  if (is_array($vocabularies) && !empty($vocabularies)) {
     $vocabulary_info = array();
-    foreach (taxonomy_get_vocabularies() as $vocabulary) {
-      $vocabulary_info[$vocabulary->machine_name] = $vocabulary->vid;
+    foreach (taxonomy_vocabulary_load_multiple(FALSE) as $vocabulary) {
+      $vocabulary_info[$vocabulary->machine_name] = $vocabulary->machine_name;
     }
     foreach ($vocabularies as $vocabulary) {
       foreach (taxonomy_get_tree($vocabulary_info[$vocabulary]) as $term) {
         taxonomy_term_delete($term->tid);
         $deleted['terms']++;
       }
-    }
-  }
-  return $deleted;
-}
-
-function _delete_all_quick($types, $vocabularies) {
-  $deleted = array(
-    'nodes' => 0,
-    'terms' => 0,
-  );
-  foreach ($types as $type) {
-    // keep this alive
-    set_time_limit(240);
-
-    // determine how many items will be deleted
-    $count = db_select('node')->condition('type', $type)->countQuery()->execute()->fetchField();
-    if ($count) { // should always be positive
-      /**
-       * build a list of tables that need to be deleted from
-       *
-       * The tables array is of the format table_name => array('col1', 'col2', ...)
-       * where "col1, col2" are using "nid, vid", but could simply be "nid".
-       */
-
-      $nid_vid = array('nid', 'vid');
-      $nid = array('nid');
-      $tables = array(
-        'node_revisions' => $nid_vid,
-        'comments' => $nid,
-      );
-      $tables[_content_tablename($type, CONTENT_DB_STORAGE_PER_CONTENT_TYPE)] = $nid_vid;
-      $content = content_types($type);
-      if (count($content['fields'])) {
-        foreach ($content['fields'] as $field) {
-          $field_info = content_database_info($field);
-          $tables[$field_info['table']] = $nid_vid;
-        }
-      }
-
-      // find all other tables that might be related
-      switch ($GLOBALS['db_type']) {
-        case 'mysql':
-        case 'mysqli':
-          $result_tables = db_query("SHOW TABLES");
-          while ($data = db_fetch_array($result_tables)) {
-            $table = array_pop($data);
-            if (isset($tables[$table]) || substr($table, 0, 8) == 'content_') {
-              continue;
-            }
-            $result_cols = db_query("SHOW COLUMNS FROM %s", $table);
-            $cols = array();
-            while ($data = db_fetch_array($result_cols)) {
-              $cols[$data['Field']] = $data;
-            }
-            if (isset($cols['nid'])) {
-              $tables[$table] = isset($cols['vid']) ? $nid_vid : $nid;
-            }
-          }
-          break;
-
-        case 'pgsql':
-          // @TODO: inspect the database and look for nid fields
-          break;
-      }
-
-      // @todo: update all node related nid references
-      // delete from all of the content tables in one sql statement
-      $sql = array(
-        'delete' => array(),
-        'from' => array(),
-        'where' => array(),
-      );
-      $index = 0;
-      foreach ($tables as $table => $cols) {
-        $table = '{' . $table . '}';
-        $sql['cols'][] = "t$index.*";
-        // build the ON clause
-        $on = array();
-        foreach ($cols as $col) {
-          $on[] = "t$index.$col = n.$col";
-        }
-        // now that we have the ON clause, build the join clause
-        $sql['join'][] = " LEFT JOIN $table t$index ON " . implode(' AND ', $on);
-        $index++;
-      }
-      $delete_sql = "DELETE n.*, " . implode(', ', $sql['cols']) . " FROM {node} n " . implode(' ', $sql['join']);
-      db_query($delete_sql . " WHERE n.type = '%s'", $type);
-
-      $deleted['nodes'] += $count;
-    }
-  }
-  $vocabulary_info = array();
-  foreach (taxonomy_get_vocabularies() as $vocabulary) {
-    $vocabulary_info[$vocabulary->machine_name] = $vocabulary->vid;
-  }
-  foreach ($vocabularies as $vocabulary) {
-    foreach (taxonomy_get_tree($vocabulary_info[$vocabulary]) as $term) {
-      taxonomy_term_delete($term->tid);
-      $deleted['terms']++;
     }
   }
   return $deleted;
@@ -508,9 +396,9 @@ function delete_all_users() {
   $form = array();
   return confirm_form(
     $form,
-    t('Are you sure you want to delete all users (uid > 1)?'),
+    t('Are you sure you want to delete all user accounts (uid > 1)?'),
     'admin',
-    t('This will delete all users except for User 1 (the administrative user). This action cannot be undone'),
+    t('This will delete all user accounts except for User 1 (the administrative user). This action cannot be undone'),
     t('Delete'),
     t('Cancel'),
     'delete_all_content');
@@ -523,7 +411,7 @@ function delete_all_users() {
 function delete_all_users_submit($form, &$form_state) {
   ini_set('max_execution_time', DELETE_ALL_MAX_EXECUTION);
   $count = delete_all_users_delete();
-  backdrop_set_message(t('All users have been deleted. Number of users deleted: !count.', array('!count' => check_plain($count))));
+  backdrop_set_message(t('All user accounts have been deleted. Number of user accounts deleted: !count.', array('!count' => check_plain($count))));
   backdrop_goto('admin');
 }
 
@@ -575,11 +463,11 @@ function _delete_all_type_keys($var) {
 }
 
 /**
- * Private callback to determine if a variable starts with 'type_'.
+ * Private callback to determine if a variable starts with 'vocabulary_'.
  * @param $var
  *   The string to test against.
  * @return bool
- *  TRUE if $var begins with 'type_'
+ *  TRUE if $var begins with 'vocabulary_'
  */
 function _delete_all_vocabulary_keys($var) {
   return (strpos($var, 'vocabulary_') === 0 ? TRUE : FALSE);
