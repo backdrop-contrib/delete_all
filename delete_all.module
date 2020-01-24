@@ -426,8 +426,6 @@ function delete_all_users() {
   }
   asort($used_roles);
 
-  //TODO: Move warning to confirmation page
-  //backdrop_set_message('This will delete all user accounts except for User 1 (the administrative user). This action cannot be undone!', 'warning');
   $form['users'] = array(
     '#type' => 'checkbox',
     '#default_value' => 0,
