@@ -29,7 +29,7 @@ function delete_all_menu() {
   );
 
   $items['admin/content/delete_content/confirm'] = array(
-    'title' => 'Confirm deletion of all content',
+    'title' => 'Confirm deletion of content',
     'page callback' => 'backdrop_get_form',
     'page arguments' => array('delete_all_content_confirm'),
     'access arguments' => array('administer nodes'),
@@ -45,6 +45,14 @@ function delete_all_menu() {
     'type' => MENU_NORMAL_ITEM,
   );
 
+
+  $items['admin/content/delete_users/confirm'] = array(
+    'title' => 'Confirm deletion of users',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('delete_all_users_confirm'),
+    'access arguments' => array('administer users'),
+    'type' => MENU_CALLBACK,
+  );
   return $items;
 }
 
@@ -394,25 +402,141 @@ function _delete_all_normal($all, $types, $vocabularies) {
  */
 function delete_all_users() {
   $form = array();
-  return confirm_form(
-    $form,
-    t('Are you sure you want to delete all user accounts (uid > 1)?'),
-    'admin',
-    t('This will delete all user accounts except for User 1 (the administrative user). This action cannot be undone'),
-    t('Delete'),
-    t('Cancel'),
-    'delete_all_content');
+  // count how many users we have in each role
+  $result = db_query("SELECT role, COUNT(*) AS num FROM {users_roles} WHERE uid <> 1 GROUP BY role");
+  $count = array();
+  foreach ($result as $data) {
+    $count[$data->role] = $data->num;
+  }
+  $count['withrole'] = db_query("SELECT COUNT(uid) AS num FROM {users_roles} WHERE uid > 1 GROUP BY uid")->rowCount();
+  $count['authenticated'] = db_query("SELECT COUNT(uid) AS num FROM {users} WHERE uid > 1 GROUP BY uid")->rowCount();
+  $count['norole'] = $count['authenticated'] - $count['withrole'];
+
+  // Add the roles to the form. If there are no eligible roles to delete,
+  // we don't need to render the form.
+  $used_roles = array();
+  $roles = user_roles($members_only = TRUE, $permission = NULL, $full_objects = FALSE);
+  foreach ($roles as $role => $info) {
+    if (array_key_exists($role, $count)) {
+      $used_roles[$role] = $info . ' (' . $count[$role] . ')';
+    }
+  }
+  if ($count['norole'] > 0) {
+    $used_roles['norole'] = 'Users without a role (' . $count['norole'] . ')';
+  }
+  asort($used_roles);
+
+  //TODO: Move warning to confirmation page
+  //backdrop_set_message('This will delete all user accounts except for User 1 (the administrative user). This action cannot be undone!', 'warning');
+  $form['users'] = array(
+    '#type' => 'checkbox',
+    '#default_value' => 0,
+    '#title' => t('Delete all user accounts'),
+    '#description' => t('Select to delete all user accounts (except user 1). This is the same as the "authenticated" role.'),
+    '#attributes' => array('class' => array('delete-all')),
+  );
+  $form['users-fieldset'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('User Accounts'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+    'roles' => array(
+      '#type' => 'checkboxes',
+      '#options' => $used_roles,
+      '#description' => t('Select the user roles to delete accounts from. Keep in mind that some users may have more than one role, and deleting users from one of their roles will delete them from all roles.'),
+    ),
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="users"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+  $form['actions'] = array(
+    '#type' => 'actions',
+    'submit' => array(
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+      '#attributes' => array('class' => array('button-danger')),
+    ),
+  );
+  $form['#action'] = url('admin/content/delete_users/confirm');
+  return $form;
 }
+
 
 /**
  * @todo Please document this function.
  * @see http://drupal.org/node/1354
  */
-function delete_all_users_submit($form, &$form_state) {
+function delete_all_users_confirm() {
+  $results = $_POST;
+
+  $form = array();
+
+  if (!(isset($results['users'])) || $results['users'] == '') {
+    $results['users'] = FALSE;
+  }
+
+  if (!isset($results['reset']) ) {
+    $results['reset'] = '';
+  }
+
+  $form['users'] = array(
+    '#type' => 'hidden',
+    '#value' => isset($results['users']) ? $results['users'] : '',
+  );
+
+  if ($results['users'] && !isset($results['roles']) && !$results['confirm']) {
+    backdrop_set_message('<p>' . t('All users (except user 1) will be deleted. Be sure to have a backup of any important data!') . '</p>', 'warning', FALSE);
+  }
+
+  if (isset($results['roles']) && is_array($results['roles'])) {
+    $roleinfo = user_roles($members_only = TRUE, $permission = NULL, $full_objects = FALSE);
+    foreach ($results['roles'] as $key_role => $role) {
+      $form['role_' . $key_role] = array(
+        '#type' => 'hidden',
+        '#value' => $role,
+      );
+      $info = $roleinfo[$role];
+      backdrop_set_message('<p>' . t('All users with role %role will be deleted. Be sure to have a backup of any important data!', array('%role' => $info)) . '</p>', 'warning', FALSE);
+    }
+  }
+
+  $keys = array_filter(array_keys($results), "_delete_all_role_keys");
+
+  foreach ($keys as $key) {
+    $form[$key] = array(
+      '#type' => 'hidden',
+      '#value' => $results[$key],
+    );
+  }
+
+  return confirm_form($form, t('Are you sure you wish to delete user accounts?'), 'admin/content/delete_users', NULL, t('Delete user accounts now'), t('Cancel delete of user accounts'));
+}
+
+
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
+function delete_all_users_confirm_submit($form, &$form_state) {
   ini_set('max_execution_time', DELETE_ALL_MAX_EXECUTION);
-  $count = delete_all_users_delete();
-  backdrop_set_message(t('All user accounts have been deleted. Number of user accounts deleted: !count.', array('!count' => check_plain($count))));
-  backdrop_goto('admin');
+  $roles = array();
+  $keys = array_filter(array_keys($form_state['values']), "_delete_all_role_keys");
+  foreach ($keys as $key) {
+    $roles[] = $form_state['values'][$key];
+  }
+
+  $count = delete_all_users_delete($roles);
+
+  if (empty($roles) && $form_state['values']['users']) {
+    backdrop_set_message(t('All user accounts have been deleted. Number of user accounts deleted: !count.', array('!count' => check_plain($count))));
+  }
+  else if (!empty($roles) && $count > 0) {
+    backdrop_set_message(t('User accounts with the role <strong>@role</strong> have been deleted. Number of accounts deleted: !count.', array('!count' => check_plain($count), '@role' => implode(', ', $roles))));
+  }
+
+  backdrop_goto('admin/users');
 }
 
 /**
@@ -421,7 +545,8 @@ function delete_all_users_submit($form, &$form_state) {
  */
 function delete_all_users_delete($roles = NULL) {
   $count = 0;
-  if (!$roles || $roles == 'authenticated') {
+  $delete_norole = 0;
+  if (!$roles || $roles == 'authenticated' || (is_array($roles) && in_array('authenticated', $roles))) {
     $result = db_query('SELECT uid FROM {users} WHERE uid > 1');
     foreach ($result as $data) {
       user_delete($data->uid);
@@ -434,10 +559,21 @@ function delete_all_users_delete($roles = NULL) {
     if (is_array($roles)) {
       $result = array();
       foreach ($roles as $role) {
-        $result = array_merge($result, db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('role', $role, '=')->execute()->fetchCol('uid'));
+        if ($role != 'norole') {
+          $result = array_merge($result, db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('role', $role, '=')->execute()->fetchCol('uid'));
+        }
+        else {
+          $delete_norole = 1;
+        }
       }
     }
     else if ($roles == 'norole') {
+      $delete_norole = 1;
+    }
+    else {
+      $result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('role', $roles, '=')->execute()->fetchCol('uid');
+    }
+    if ($delete_norole) {
       $users = entity_load_multiple('user', FALSE, $conditions = array(), $reset = FALSE);
       foreach ($users as $user) {
         // All users currently
@@ -445,9 +581,6 @@ function delete_all_users_delete($roles = NULL) {
       }
       $roles_result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->execute()->fetchCol('uid');
       $result = array_diff($result, $roles_result);
-    }
-    else {
-      $result = db_select('users_roles', 'ur')->fields('ur', array('uid'))->condition('role', $roles, '=')->execute()->fetchCol('uid');
     }
     foreach ($result as $data) {
       if ($data > 1) {
@@ -469,6 +602,17 @@ function delete_all_users_delete($roles = NULL) {
  */
 function _delete_all_type_keys($var) {
   return (strpos($var, 'type_') === 0 ? TRUE : FALSE);
+}
+
+/**
+ * Private callback to determine if a variable starts with 'role_'.
+ * @param $var
+ *   The string to test against.
+ * @return bool
+ *  TRUE if $var begins with 'type_'
+ */
+function _delete_all_role_keys($var) {
+  return (strpos($var, 'role_') === 0 ? TRUE : FALSE);
 }
 
 /**
